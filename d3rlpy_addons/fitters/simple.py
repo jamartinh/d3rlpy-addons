@@ -76,7 +76,27 @@ class EpisodicFitter:
         self.algo._save_params(self.logger)
         self.batch_size = self.algo.batch_size
 
-    def fitter(self, max_steps, max_episodes=None, max_steps_per_episode=None):
+    def fitter(self,
+               max_steps,
+               max_episodes=None,
+               max_steps_per_episode=None,
+               act_fn=lambda action: action,
+               obs_fn = lambda observation : observation):
+        """
+        Perform an environment step.
+
+        :param max_steps: maximum number of steps to run
+        :param max_episodes: maximum number of episodes allowed to run
+        :param max_steps_per_episode: maximum number of steps allowed per episode
+        :param act_fn: a callable to transform action from algo before sendint it to env
+        :param obs_fn: a callable to transform osbervations from env before algo.get_action
+        :return: an environment step as:
+            metrics: a dict with metrics collected from all the steps
+            (observation: the observation after env step ,
+            reward: the reward after env step,
+            terminal: terminal flag after env step,
+            info: info dict returned by env step)
+        """
         if max_steps_per_episode is None:
             max_steps_per_episode = max_steps
         if max_episodes is None:
@@ -98,12 +118,15 @@ class EpisodicFitter:
                     break
 
             # sample exploration action
+            observation = obs_fn(observation)
             action = self.get_action(observation, total_step)
+
 
             # store observation in buffer
             self.buffer.append(observation, action, reward, terminal)
 
             # get next observation
+            action = act_fn(action)
             observation, reward, terminal, info = self.env.step(action)
 
             # pseudo epoch count
