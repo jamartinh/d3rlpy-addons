@@ -173,4 +173,5 @@ class EpisodicFitter:
             act = self.explorer.sample(self.algo, obs, step)
         else:
             act = self.algo.sample_action([obs])[0]
+
         return act
