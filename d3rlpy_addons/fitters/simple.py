@@ -14,6 +14,8 @@ class EpisodicFitter:
                  algo,
                  buffer,
                  explorer=None,
+                 act_fn=lambda action: action,
+                 obs_fn=lambda observation: observation,
                  n_steps=1000000,
                  n_steps_per_epoch=10000,
                  update_interval=1,
@@ -32,6 +34,8 @@ class EpisodicFitter:
             algo (d3rlpy.algos.base.AlgoBase): algorithm.
             buffer (d3rlpy.online.buffers.Buffer): replay buffer.
             explorer (d3rlpy.online.explorers.Explorer): action explorer.
+            act_fn: a callable to transform action from algo before sendint it to env.
+            obs_fn: a callable to transform osbervations from env before algo.get_action.
             n_steps (int): the number of total steps to train.
             n_steps_per_epoch (int): the number of steps per epoch.
             update_interval (int): the number of steps per update.
@@ -52,6 +56,8 @@ class EpisodicFitter:
         self.algo = algo
         self.buffer = buffer
         self.explorer = explorer
+        self.act_fn = act_fn
+        self.obs_fn = obs_fn
         self.n_steps = n_steps
         self.n_steps_per_epoch = n_steps_per_epoch
         self.update_interval = update_interval
@@ -76,20 +82,13 @@ class EpisodicFitter:
         self.algo._save_params(self.logger)
         self.batch_size = self.algo.batch_size
 
-    def fitter(self,
-               max_steps,
-               max_episodes=None,
-               max_steps_per_episode=None,
-               act_fn=lambda action: action,
-               obs_fn = lambda observation : observation):
+    def fitter(self, max_steps, max_episodes=None, max_steps_per_episode=None):
         """
         Perform an environment step.
 
         :param max_steps: maximum number of steps to run
         :param max_episodes: maximum number of episodes allowed to run
         :param max_steps_per_episode: maximum number of steps allowed per episode
-        :param act_fn: a callable to transform action from algo before sendint it to env
-        :param obs_fn: a callable to transform osbervations from env before algo.get_action
         :return: an environment step as:
             metrics: a dict with metrics collected from all the steps
             (observation: the observation after env step ,
@@ -107,6 +106,7 @@ class EpisodicFitter:
         episode = 0
         terminal = True
         episode_step = 1
+        reward = 0
 
         for total_step in range(max_steps):
             if terminal or episode_step > max_steps_per_episode:
@@ -118,15 +118,14 @@ class EpisodicFitter:
                     break
 
             # sample exploration action
-            observation = obs_fn(observation)
+            observation = self.obs_fn(observation)
             action = self.get_action(observation, total_step)
-
+            action = self.act_fn(action)
 
             # store observation in buffer
             self.buffer.append(observation, action, reward, terminal)
 
             # get next observation
-            action = act_fn(action)
             observation, reward, terminal, info = self.env.step(action)
 
             # pseudo epoch count
