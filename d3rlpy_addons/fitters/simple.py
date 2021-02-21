@@ -1,11 +1,4 @@
-import numpy as np
-
-from tqdm.auto import tqdm
-from d3rlpy.preprocessing.stack import StackedObservation
-from d3rlpy.metrics.scorer import evaluate_on_environment
 from d3rlpy.logger import D3RLPyLogger
-from d3rlpy.dataset import MDPDataset
-from d3rlpy.online.utility import get_action_size_from_env
 
 
 class EpisodicFitter:
@@ -151,14 +144,8 @@ class EpisodicFitter:
                         self.logger.add_metric(name, val)
 
             if total_step % self.n_steps_per_epoch == 0:
-
-                # until new logger version return metrics
-                for name, buffer in self.logger.metrics_buffer.items():
-                    metric = np.mean(buffer)
-                    metrics[name] = metric
-
                 # save new metrics
-                self.logger.commit(epoch, total_step)
+                metrics = self.logger.commit(epoch, total_step)
 
             episode_step += 1
             metrics["episode"] = episode

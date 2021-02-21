@@ -4,7 +4,10 @@ setup(
     name='d3rlpy-addons',
     version='0.1',
     packages=[
-        'd3rlpy_addons', 'd3rlpy_addons.fitters', 'd3rlpy_addons.wrappers'
+        'd3rlpy_addons',
+        'd3rlpy_addons.fitters',
+        'd3rlpy_addons.wrappers',
+        "d3rlpy_addons.models"
     ],
     url='',
     license='MIT',
