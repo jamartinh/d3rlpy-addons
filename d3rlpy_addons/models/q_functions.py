@@ -56,5 +56,13 @@ class DQRQFunctionFactory(QFunctionFactory):
     def q_value_offset(self) -> float:
         return self._q_value_offset
 
+    @property
+    def share_encoder(self) -> bool:
+        return False
+
+    @property
+    def bootstrap(self) -> bool:
+        return False
+
 
 register_q_func_factory(DQRQFunctionFactory)

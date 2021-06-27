@@ -2,7 +2,7 @@ from typing import cast
 
 import torch
 from d3rlpy.models.torch import Encoder, EncoderWithAction
-from d3rlpy.models.torch.q_functions import ContinuousQRQFunction, DiscreteQRQFunction
+from d3rlpy.models.torch.q_functions.qr_q_function import ContinuousQRQFunction, DiscreteQRQFunction
 from torch import nn
 
 
