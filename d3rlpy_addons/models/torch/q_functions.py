@@ -53,7 +53,7 @@ class ContinuousDQRQFunction(ContinuousQRQFunction):
         self._q_value_offset = q_value_offset
 
         # get a new instance or clone a frozen copy
-        self._fc0 = type(self._fc)(encoder.get_feature_size(), n_quantiles)
+        self._fc0 = type(self._fc)(encoder.get_feature_size(), self._n_quantiles)
 
         # copy weights and stuff
         self._fc0.load_state_dict(self._fc.state_dict())
@@ -79,7 +79,7 @@ class DiscreteDMeanQFunction(DiscreteMeanQFunction):  # type: ignore
         self._q_value_offset = q_value_offset
 
         # get a new instance or clone a frozen copy
-        self._fc0 = type(self._fc)(encoder.get_feature_size())
+        self._fc0 = type(self._fc)(encoder.get_feature_size(), 1)
 
         # copy weights and stuff
         self._fc0.load_state_dict(self._fc.state_dict())
@@ -103,7 +103,7 @@ class ContinuousDMeanQFunction(ContinuousMeanQFunction):  # type: ignore
         self._q_value_offset = q_value_offset
 
         # get a new instance or clone a frozen copy
-        self._fc0 = type(self._fc)(encoder.get_feature_size())
+        self._fc0 = type(self._fc)(encoder.get_feature_size(), 1)
 
         # copy weights and stuff
         self._fc0.load_state_dict(self._fc.state_dict())
