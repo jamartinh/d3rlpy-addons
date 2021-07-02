@@ -2,7 +2,12 @@ from typing import Any, ClassVar, Dict
 
 from d3rlpy.models.q_functions import QFunctionFactory, register_q_func_factory
 from d3rlpy.models.torch import Encoder, EncoderWithAction
-from d3rlpy_addons.models.torch.q_functions import ContinuousDMeanQFunction, ContinuousDQRQFunction, DiscreteDMeanQFunction, DiscreteDQRQFunction
+from d3rlpy_addons.models.torch.q_functions import (
+    ContinuousDMeanQFunction,
+    ContinuousDQRQFunction,
+    DiscreteDMeanQFunction,
+    DiscreteDQRQFunction,
+)
 
 
 class DMeanQFunctionFactory(QFunctionFactory):
@@ -21,20 +26,24 @@ class DMeanQFunctionFactory(QFunctionFactory):
     TYPE: ClassVar[str] = "dmean"
     _q_value_offset: float
 
-    def __init__(self, bootstrap: bool = False, share_encoder: bool = False, q_value_offset: float = 0):
+    def __init__(
+        self,
+        bootstrap: bool = False,
+        share_encoder: bool = False,
+        q_value_offset: float = 0,
+    ):
         super().__init__(bootstrap, share_encoder)
         self._q_value_offset = q_value_offset
 
     def create_discrete(
-            self,
-            encoder: Encoder,
-            action_size: int,
+        self, encoder: Encoder, action_size: int,
     ) -> DiscreteDMeanQFunction:
-        return DiscreteDMeanQFunction(encoder, action_size, self._q_value_offset)
+        return DiscreteDMeanQFunction(
+            encoder, action_size, self._q_value_offset
+        )
 
     def create_continuous(
-            self,
-            encoder: EncoderWithAction,
+        self, encoder: EncoderWithAction,
     ) -> ContinuousDMeanQFunction:
         return ContinuousDMeanQFunction(encoder, self._q_value_offset)
 
@@ -63,30 +72,36 @@ class DQRQFunctionFactory(QFunctionFactory):
     _n_quantiles: int
     _q_value_offset: float
 
-    def __init__(self, bootstrap=False, share_encoder=False, n_quantiles: int = 32, q_value_offset: float = 0):
+    def __init__(
+        self,
+        bootstrap=False,
+        share_encoder=False,
+        n_quantiles: int = 32,
+        q_value_offset: float = 0,
+    ):
         super().__init__(bootstrap, share_encoder)
         self._n_quantiles = n_quantiles
         self._q_value_offset = q_value_offset
 
     def create_discrete(
-            self, encoder: Encoder, action_size: int
+        self, encoder: Encoder, action_size: int
     ) -> DiscreteDQRQFunction:
-        return DiscreteDQRQFunction(encoder,
-                                    action_size,
-                                    self._n_quantiles,
-                                    self._q_value_offset)
+        return DiscreteDQRQFunction(
+            encoder, action_size, self._n_quantiles, self._q_value_offset
+        )
 
     def create_continuous(
-            self,
-            encoder: EncoderWithAction,
+        self, encoder: EncoderWithAction,
     ) -> ContinuousDQRQFunction:
-        return ContinuousDQRQFunction(encoder,
-                                      self._n_quantiles,
-                                      self._q_value_offset)
+        return ContinuousDQRQFunction(
+            encoder, self._n_quantiles, self._q_value_offset
+        )
 
     def get_params(self, deep: bool = False) -> Dict[str, Any]:
-        return {"n_quantiles": self._n_quantiles,
-                "q_value_offset": self._q_value_offset}
+        return {
+            "n_quantiles": self._n_quantiles,
+            "q_value_offset": self._q_value_offset,
+        }
 
     @property
     def n_quantiles(self) -> int:
