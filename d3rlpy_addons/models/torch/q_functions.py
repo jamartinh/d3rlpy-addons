@@ -40,6 +40,9 @@ class DiscreteDQRQFunction(DiscreteQRQFunction):
         for param in self._fc0.parameters():
             param.requires_grad = False
 
+        # set fc0 in eval mode only
+        self._fc0.eval()
+
     def _compute_quantiles(
         self, h: torch.Tensor, taus: torch.Tensor
     ) -> torch.Tensor:
@@ -76,6 +79,9 @@ class ContinuousDQRQFunction(ContinuousQRQFunction):
         for param in self._fc0.parameters():
             param.requires_grad = False
 
+        # set fc0 in eval mode only
+        self._fc0.eval()
+
     def _compute_quantiles(
         self, h: torch.Tensor, taus: torch.Tensor
     ) -> torch.Tensor:
@@ -84,7 +90,7 @@ class ContinuousDQRQFunction(ContinuousQRQFunction):
         )
 
 
-class DiscreteDMeanQFunction(DiscreteMeanQFunction):  # type: ignore
+class DiscreteDMeanQFunction(DiscreteMeanQFunction):
     _fc0: nn.Linear
     _q_value_offset: float
 
@@ -106,6 +112,9 @@ class DiscreteDMeanQFunction(DiscreteMeanQFunction):  # type: ignore
         for param in self._fc0.parameters():
             param.requires_grad = False
 
+        # set fc0 in eval mode only
+        self._fc0.eval()
+
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         return cast(
             torch.Tensor,
@@ -115,7 +124,7 @@ class DiscreteDMeanQFunction(DiscreteMeanQFunction):  # type: ignore
         )
 
 
-class ContinuousDMeanQFunction(ContinuousMeanQFunction):  # type: ignore
+class ContinuousDMeanQFunction(ContinuousMeanQFunction):
     _fc0: nn.Linear
     _q_value_offset: float
 
@@ -134,6 +143,9 @@ class ContinuousDMeanQFunction(ContinuousMeanQFunction):  # type: ignore
         # freeze model by freezing parameters
         for param in self._fc0.parameters():
             param.requires_grad = False
+
+        # set fc0 in eval mode only
+        self._fc0.eval()
 
     def forward(self, x: torch.Tensor, action: torch.Tensor) -> torch.Tensor:
         return cast(
