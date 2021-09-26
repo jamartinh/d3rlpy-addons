@@ -1,4 +1,4 @@
-from typing import List, Tuple, Union, cast
+from typing import Callable, List, Tuple, Union, cast
 
 import torch
 from torch import nn
@@ -77,7 +77,13 @@ class EnsembleDeterministicResidualPolicy(Policy):
         self.n_actors = n_actors
         self._fc = nn.ModuleList(
             [
-                nn.Linear(encoder.get_feature_size(), encoder.action_size)
+                nn.Sequential(
+                    nn.Linear(
+                        encoder.get_feature_size(), encoder.get_feature_size()
+                    ),
+                    nn.ReLU(),
+                    nn.Linear(encoder.get_feature_size(), encoder.action_size),
+                )
                 for _ in range(self.n_actors)
             ]
         )
@@ -125,7 +131,55 @@ class EnsembleDeterministicResidualPolicy(Policy):
         )
 
 
-class EnsembleSquashedNormalPolicy(Policy):
+class EnsembleCallableDeterministicResidualPolicy(EnsembleDeterministicPolicy):
+    _policy: Callable
+
+    def __init__(
+        self,
+        encoder: Encoder,
+        policy: Callable,
+        action_size: int,
+        scale: float,
+        n_actors: int = 1,
+    ):
+        super(EnsembleCallableDeterministicResidualPolicy).__init__(
+            encoder, action_size, n_actors
+        )
+        self._scale = scale
+        self._policy = policy
+
+    def forward(self, x: torch.Tensor, reduction: str = "mean") -> torch.Tensor:
+        policy_action = cast(torch.Tensor, self._policy(x))
+        residual_action = super().forward(x, reduction)
+        action = policy_action + residual_action
+        action = action.clamp(-1.0, 1.0)
+
+        return action
+
+    def __call__(
+        self, x: torch.Tensor, reduction: str = "mean"
+    ) -> torch.Tensor:
+        return cast(torch.Tensor, self.forward(x, reduction))
+
+    def sample_with_log_prob(
+        self, x: torch.Tensor
+    ) -> Tuple[torch.Tensor, torch.Tensor]:
+        raise NotImplementedError(
+            "deterministic policy does not support sample"
+        )
+
+    def sample_n_with_log_prob(
+        self, x: torch.Tensor, n: int
+    ) -> Tuple[torch.Tensor, torch.Tensor]:
+        raise NotImplementedError(
+            "deterministic policy does not support sample_n"
+        )
+
+    def best_action(self, x: torch.Tensor) -> torch.Tensor:
+        return self.forward(x)
+
+
+class EnsembleSquashedNormalPolicy(Policy):  # WIP TODO
     _encoder: Encoder
     _action_size: int
     _min_logstd: float
@@ -275,7 +329,7 @@ class EnsembleSquashedNormalPolicy(Policy):
         return self._min_logstd + logstd * base_logstd
 
 
-class EnsembleCategoricalPolicy(Policy):
+class EnsembleCategoricalPolicy(Policy):  # WIP TODO
     _encoder: Encoder
     _fc: nn.Linear
 
