@@ -1,8 +1,8 @@
-from typing import cast
+import copy
+from typing import Union, cast
 
 import torch
-from torch import nn
-
+import torch.nn.functional as F
 from d3rlpy.models.torch import Encoder, EncoderWithAction
 from d3rlpy.models.torch.q_functions.mean_q_function import (
     ContinuousMeanQFunction,
@@ -12,6 +12,10 @@ from d3rlpy.models.torch.q_functions.qr_q_function import (
     ContinuousQRQFunction,
     DiscreteQRQFunction,
 )
+from d3rlpy.models.torch.q_functions.utility import compute_reduce
+from torch import nn
+
+from d3rlpy_addons.models.torch.layers import GaussianNoiseInverseWeightLayer
 
 
 class DiscreteDQRQFunction(DiscreteQRQFunction):
@@ -103,10 +107,10 @@ class DiscreteDMeanQFunction(DiscreteMeanQFunction):
         self._q_value_offset = q_value_offset
 
         # get a new instance or clone a frozen copy
-        self._fc0 = type(self._fc)(encoder.get_feature_size(), 1)
+        self._fc0 = copy.deepcopy(self._fc)
 
         # copy weights and stuff
-        self._fc0.load_state_dict(self._fc.state_dict())
+        # self._fc0.load_state_dict(self._fc.state_dict())
 
         # freeze model by freezing parameters
         for param in self._fc0.parameters():
@@ -127,6 +131,7 @@ class DiscreteDMeanQFunction(DiscreteMeanQFunction):
 class ContinuousDMeanQFunction(ContinuousMeanQFunction):
     _fc0: nn.Linear
     _q_value_offset: float
+    _encoder0: Union[EncoderWithAction, nn.Module]
 
     def __init__(self, encoder: EncoderWithAction, q_value_offset: float = 0.0):
         super().__init__(encoder=encoder)
@@ -136,21 +141,64 @@ class ContinuousDMeanQFunction(ContinuousMeanQFunction):
 
         # get a new instance or clone a frozen copy
         self._fc0 = type(self._fc)(encoder.get_feature_size(), 1)
+        self._encoder0 = copy.deepcopy(self._encoder)
 
         # copy weights and stuff
         self._fc0.load_state_dict(self._fc.state_dict())
+        self._encoder0.load_state_dict(self._encoder0.state_dict())
 
         # freeze model by freezing parameters
         for param in self._fc0.parameters():
             param.requires_grad = False
 
+        for param in self._encoder0.parameters():
+            param.requires_grad = False
+
         # set fc0 in eval mode only
         self._fc0.eval()
+        self._encoder0.eval()
+        self._gaussian_layer = GaussianNoiseInverseWeightLayer(
+            n_samples=10, mean=0.0, std=0.01
+        )
 
     def forward(self, x: torch.Tensor, action: torch.Tensor) -> torch.Tensor:
         return cast(
             torch.Tensor,
-            self._fc(self._encoder(x, action))
-            - self._fc0(self._encoder(x, action))
+            (
+                self._fc(self._encoder(x, action))
+                - self._fc0(self._encoder0(x, action))
+            )
             + self._q_value_offset,
         )
+        # return cast(torch.Tensor, self._fc(self._encoder(x, action)))
+
+    def compute_error(
+        self,
+        obs_t: torch.Tensor,
+        act_t: torch.Tensor,
+        rew_tp1: torch.Tensor,
+        q_tp1: torch.Tensor,
+        ter_tp1: torch.Tensor,
+        gamma: float = 0.99,
+        reduction: str = "mean",
+    ) -> torch.Tensor:
+
+        with torch.no_grad():
+            obs_t, w = self._gaussian_layer(obs_t)  # 64,5  ->  192,5
+
+            # resize act_t  64,1  ->  192,1
+            act_t = torch.repeat_interleave(
+                act_t, repeats=self._gaussian_layer.n_samples, dim=0
+            )
+
+        q_t = self.forward(obs_t, act_t)
+
+        y = rew_tp1 + gamma * q_tp1 * (1 - ter_tp1)
+        # resize y 64,1  ->  192,1
+        y = torch.repeat_interleave(
+            y, repeats=self._gaussian_layer.n_samples, dim=0
+        )
+
+        loss = w * F.mse_loss(q_t, y, reduction="none")
+
+        return compute_reduce(loss, reduction)
