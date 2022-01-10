@@ -1,1 +1,1 @@
-from .simple import EpisodicFitter
+from .offline import simple_fitter

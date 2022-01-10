@@ -47,12 +47,10 @@ class DiscreteDQRQFunction(DiscreteQRQFunction):
         # set fc0 in eval mode only
         self._fc0.eval()
 
-    def _compute_quantiles(
-        self, h: torch.Tensor, taus: torch.Tensor
-    ) -> torch.Tensor:
-        h = cast(
-            torch.Tensor, (self._fc(h) - self._fc0(h)) + self._q_value_offset
-        )
+    def _compute_quantiles(self, h: torch.Tensor,
+                           taus: torch.Tensor) -> torch.Tensor:
+        h = cast(torch.Tensor,
+                 (self._fc(h) - self._fc0(h)) + self._q_value_offset)
         return h.view(-1, self._action_size, self._n_quantiles)
 
 
@@ -72,9 +70,8 @@ class ContinuousDQRQFunction(ContinuousQRQFunction):
         self._q_value_offset = q_value_offset
 
         # get a new instance or clone a frozen copy
-        self._fc0 = type(self._fc)(
-            encoder.get_feature_size(), self._n_quantiles
-        )
+        self._fc0 = type(self._fc)(encoder.get_feature_size(),
+                                   self._n_quantiles)
 
         # copy weights and stuff
         self._fc0.load_state_dict(self._fc.state_dict())
@@ -86,21 +83,20 @@ class ContinuousDQRQFunction(ContinuousQRQFunction):
         # set fc0 in eval mode only
         self._fc0.eval()
 
-    def _compute_quantiles(
-        self, h: torch.Tensor, taus: torch.Tensor
-    ) -> torch.Tensor:
-        return cast(
-            torch.Tensor, (self._fc(h) - self._fc0(h)) + self._q_value_offset
-        )
+    def _compute_quantiles(self, h: torch.Tensor,
+                           taus: torch.Tensor) -> torch.Tensor:
+        return cast(torch.Tensor,
+                    (self._fc(h) - self._fc0(h)) + self._q_value_offset)
 
 
 class DiscreteDMeanQFunction(DiscreteMeanQFunction):
     _fc0: nn.Linear
     _q_value_offset: float
 
-    def __init__(
-        self, encoder: Encoder, action_size: int, q_value_offset: float = 0.0
-    ):
+    def __init__(self,
+                 encoder: Encoder,
+                 action_size: int,
+                 q_value_offset: float = 0.0):
         super().__init__(encoder=encoder, action_size=action_size)
 
         # initial q_values for approximation
@@ -122,9 +118,8 @@ class DiscreteDMeanQFunction(DiscreteMeanQFunction):
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         return cast(
             torch.Tensor,
-            self._fc(self._encoder(x))
-            - self._fc0(self._encoder(x))
-            + self._q_value_offset,
+            self._fc(self._encoder(x)) - self._fc0(self._encoder(x)) +
+            self._q_value_offset,
         )
 
 
@@ -133,7 +128,9 @@ class ContinuousDMeanQFunction(ContinuousMeanQFunction):
     _q_value_offset: float
     _encoder0: Union[EncoderWithAction, nn.Module]
 
-    def __init__(self, encoder: EncoderWithAction, q_value_offset: float = 0.0):
+    def __init__(self,
+                 encoder: EncoderWithAction,
+                 q_value_offset: float = 0.0):
         super().__init__(encoder=encoder)
 
         # initial q_values for approximation
@@ -145,7 +142,7 @@ class ContinuousDMeanQFunction(ContinuousMeanQFunction):
 
         # copy weights and stuff
         self._fc0.load_state_dict(self._fc.state_dict())
-        self._encoder0.load_state_dict(self._encoder0.state_dict())
+        self._encoder0.load_state_dict(self._encoder.state_dict())
 
         # freeze model by freezing parameters
         for param in self._fc0.parameters():
@@ -157,18 +154,15 @@ class ContinuousDMeanQFunction(ContinuousMeanQFunction):
         # set fc0 in eval mode only
         self._fc0.eval()
         self._encoder0.eval()
-        self._gaussian_layer = GaussianNoiseInverseWeightLayer(
-            n_samples=10, mean=0.0, std=0.01
-        )
+        self._gaussian_layer = GaussianNoiseInverseWeightLayer(n_samples=10,
+                                                               mean=0.0,
+                                                               std=0.01)
 
     def forward(self, x: torch.Tensor, action: torch.Tensor) -> torch.Tensor:
         return cast(
             torch.Tensor,
-            (
-                self._fc(self._encoder(x, action))
-                - self._fc0(self._encoder0(x, action))
-            )
-            + self._q_value_offset,
+            (self._fc(self._encoder(x, action)) -
+             self._fc0(self._encoder0(x, action))) + self._q_value_offset,
         )
         # return cast(torch.Tensor, self._fc(self._encoder(x, action)))
 
@@ -188,16 +182,15 @@ class ContinuousDMeanQFunction(ContinuousMeanQFunction):
 
             # resize act_t  64,1  ->  192,1
             act_t = torch.repeat_interleave(
-                act_t, repeats=self._gaussian_layer.n_samples, dim=0
-            )
+                act_t, repeats=self._gaussian_layer.n_samples, dim=0)
 
         q_t = self.forward(obs_t, act_t)
 
         y = rew_tp1 + gamma * q_tp1 * (1 - ter_tp1)
         # resize y 64,1  ->  192,1
-        y = torch.repeat_interleave(
-            y, repeats=self._gaussian_layer.n_samples, dim=0
-        )
+        y = torch.repeat_interleave(y,
+                                    repeats=self._gaussian_layer.n_samples,
+                                    dim=0)
 
         loss = w * F.mse_loss(q_t, y, reduction="none")
 

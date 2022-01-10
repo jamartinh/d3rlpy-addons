@@ -14,14 +14,6 @@ from d3rlpy.models.torch.dynamics import _apply_spectral_norm_recursively, _comp
 
 class StateProbabilisticDynamicsModel(nn.Module):  # type: ignore
     """Probabilistic dynamics model.
-
-    References:
-        * `Janner et al., When to Trust Your Model: Model-Based Policy
-          Optimization. <https://arxiv.org/abs/1906.08253>`_
-        * `Chua et al., Deep Reinforcement Learning in a Handful of Trials
-          using Probabilistic Dynamics Models.
-          <https://arxiv.org/abs/1805.12114>`_
-
     """
 
     _encoder: EncoderWithAction
@@ -38,10 +30,11 @@ class StateProbabilisticDynamicsModel(nn.Module):  # type: ignore
 
         feature_size = encoder.get_feature_size()
         observation_size = encoder.observation_shape[0]
-        out_size = observation_size+1
+        out_size = observation_size
 
         # TODO: handle image observation
         self._mu = spectral_norm(nn.Linear(feature_size, out_size))
+        self._mu = nn.Linear(feature_size, out_size)
         self._logstd = nn.Linear(feature_size, out_size)
 
         # logstd bounds
@@ -76,8 +69,8 @@ class StateProbabilisticDynamicsModel(nn.Module):  # type: ignore
         dist = Normal(mu, logstd.exp())
         pred = dist.rsample()
         # residual prediction
-        next_x = x + pred[:, :-1]
-        next_reward = pred[:, -1].view(-1, 1)*0.0
+        next_x = x + pred
+        next_reward = pred.view(-1, 1)*0.0
         return next_x, next_reward, dist.variance.sum(dim=1, keepdims=True)
 
     def compute_error(
@@ -90,14 +83,11 @@ class StateProbabilisticDynamicsModel(nn.Module):  # type: ignore
         mu, logstd = self.compute_stats(obs_t, act_t)
 
         # residual prediction
-        mu_x = obs_t + mu[:, :-1]
-        #mu_reward = mu[:, -1].view(-1, 1) * 0.0
-        logstd_x = logstd[:, :-1]
-        #logstd_reward = logstd[:, -1].view(-1, 1)*0.0
+        mu_x = obs_t + mu
+        logstd_x = logstd
 
         # gaussian likelihood loss
         likelihood_loss = _gaussian_likelihood(obs_tp1, mu_x, logstd_x)
-        #likelihood_loss += _gaussian_likelihood(rew_tp1, mu_reward, logstd_reward)
 
         # penalty to minimize standard deviation
         penalty = logstd_x.sum(dim=1, keepdim=True)
@@ -109,94 +99,3 @@ class StateProbabilisticDynamicsModel(nn.Module):  # type: ignore
 
         return loss.view(-1, 1)
 
-
-class ProbabilisticStateEnsembleDynamicsModel(nn.Module):  # type: ignore
-    _models: nn.ModuleList
-
-    def __init__(self, models: List[StateProbabilisticDynamicsModel]):
-        super().__init__()
-        self._models = nn.ModuleList(models)
-
-    def forward(
-        self,
-        x: torch.Tensor,
-        action: torch.Tensor,
-        indices: Optional[torch.Tensor] = None,
-    ) -> Tuple[torch.Tensor, torch.Tensor]:
-        return self.predict_with_variance(x, action, indices=indices)[:2]
-
-    def __call__(
-        self,
-        x: torch.Tensor,
-        action: torch.Tensor,
-        indices: Optional[torch.Tensor] = None,
-    ) -> Tuple[torch.Tensor, torch.Tensor]:
-        return cast(
-            Tuple[torch.Tensor, torch.Tensor],
-            super().__call__(x, action, indices),
-        )
-
-    def predict_with_variance(
-        self,
-        x: torch.Tensor,
-        action: torch.Tensor,
-        variance_type: str = "data",
-        indices: Optional[torch.Tensor] = None,
-    ) -> Tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
-        observations_list: List[torch.Tensor] = []
-        rewards_list: List[torch.Tensor] = []
-        variances_list: List[torch.Tensor] = []
-
-        # predict next observation and reward
-        for model in self._models:
-            obs, rew, var = model.predict_with_variance(x, action)
-            observations_list.append(obs.view(1, x.shape[0], -1))
-            rewards_list.append(rew.view(1, x.shape[0], 1))
-            variances_list.append(var.view(1, x.shape[0], 1))
-
-        # (ensemble, batch, -1) -> (batch, ensemble, -1)
-        observations = torch.cat(observations_list, dim=0).transpose(0, 1)
-        rewards = torch.cat(rewards_list, dim=0).transpose(0, 1)
-        variances = torch.cat(variances_list, dim=0).transpose(0, 1)
-
-        variances = _compute_ensemble_variance(
-            observations=observations,
-            rewards=rewards,
-            variances=variances,
-            variance_type=variance_type,
-        )
-
-        if indices is None:
-            return observations, rewards, variances
-
-        # pick samples based on indices
-        partial_observations = observations[torch.arange(x.shape[0]), indices]
-        partial_rewards = rewards[torch.arange(x.shape[0]), indices]
-        return partial_observations, partial_rewards, variances
-
-    def compute_error(
-        self,
-        obs_t: torch.Tensor,
-        act_t: torch.Tensor,
-        rew_tp1: torch.Tensor,
-        obs_tp1: torch.Tensor,
-        masks: Optional[torch.Tensor] = None,
-    ) -> torch.Tensor:
-        loss_sum = torch.tensor(0.0, dtype=torch.float32, device=obs_t.device)
-        for i, model in enumerate(self._models):
-            loss = model.compute_error(obs_t, act_t, rew_tp1, obs_tp1)
-            assert loss.shape == (obs_t.shape[0], 1)
-
-            # create mask if necessary
-            if masks is None:
-                mask = torch.randint(0, 2, size=loss.shape, device=obs_t.device)
-            else:
-                mask = masks[i]
-
-            loss_sum += (loss * mask).mean()
-
-        return loss_sum
-
-    @property
-    def models(self) -> nn.ModuleList:
-        return self._models
