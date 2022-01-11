@@ -43,6 +43,7 @@ def simple_fitter(
     scorers: Optional[Dict[str, Callable[[Any, List[Episode]], float]]] = None,
     shuffle: bool = True,
     callback: Optional[Callable[["LearnableBase", int, int], None]] = None,
+    fit_scalers: bool = False,
 ) -> Generator[Tuple[int, Dict[str, float]], None, None]:
     """Iterate over epochs steps to train with the given dataset. At each iteration algo methods
      and properties can be changed or queried.
@@ -79,6 +80,7 @@ def simple_fitter(
         shuffle: flag to shuffle transitions on each epoch.
         callback: callable function that takes ``(algo, epoch, total_step)``
             , which is called every step.
+        fit_scalers: flag to fit scalers or not (when already fitted)
 
     Returns:
         iterator yielding current epoch and metrics dict.
@@ -149,27 +151,28 @@ def simple_fitter(
     # add reference to active logger to algo class during fit
     algo._active_logger = logger
 
-    # # initialize scaler
-    # if algo._scaler:
-    #     LOG.debug("Fitting scaler...", scaler=algo._scaler.get_type())
-    #     algo._scaler.fit(transitions)
-    #
-    # # initialize action scaler
-    # if algo._action_scaler:
-    #     LOG.debug(
-    #         "Fitting action scaler...", action_scaler=algo._action_scaler.get_type(),
-    #     )
-    #     algo._action_scaler.fit(transitions)
-    #
-    # # initialize reward scaler
-    # if algo._reward_scaler:
-    #     LOG.debug(
-    #         "Fitting reward scaler...", reward_scaler=algo._reward_scaler.get_type(),
-    #     )
-    #     algo._reward_scaler.fit(transitions)
+    if fit_scalers:
+        # initialize scaler
+        if algo.scaler:
+            LOG.debug("Fitting scaler...", scaler=algo.scaler.get_type())
+            algo.scaler.fit(transitions)
+
+        # initialize action scaler
+        if algo.action_scaler:
+            LOG.debug(
+                "Fitting action scaler...", action_scaler=algo.action_scaler.get_type(),
+            )
+            algo.action_scaler.fit(transitions)
+
+        # initialize reward scaler
+        if algo.reward_scaler:
+            LOG.debug(
+                "Fitting reward scaler...", reward_scaler=algo.reward_scaler.get_type(),
+            )
+            algo.reward_scaler.fit(transitions)
 
     # instantiate implementation
-    if algo._impl is None:
+    if algo.impl is None:
         LOG.debug("Building models...")
         transition = iterator.transitions[0]
         action_size = transition.get_action_size()
