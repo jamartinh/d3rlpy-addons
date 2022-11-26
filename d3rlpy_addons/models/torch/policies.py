@@ -5,7 +5,7 @@ from torch import nn
 from torch.distributions import Categorical, Normal
 
 from d3rlpy.models.encoders import Encoder, EncoderWithAction
-from d3rlpy.models.torch.policies import Policy, squash_action
+from d3rlpy.models.torch.policies import Policy, squash_action, SquashedNormalPolicy
 from d3rlpy.models.torch.q_functions.ensemble_q_function import _reduce_ensemble
 
 
@@ -180,49 +180,11 @@ class EnsembleCallableDeterministicResidualPolicy(EnsembleDeterministicPolicy):
 
 
 class EnsembleSquashedNormalPolicy(Policy):  # WIP TODO
-    _encoder: Encoder
-    _action_size: int
-    _min_logstd: float
-    _max_logstd: float
-    _use_std_parameter: bool
-    _mu: nn.ModuleList
-    _logstd: Union[nn.ModuleList, nn.ParameterList]
+    _models: nn.ModuleList
 
-    def __init__(
-        self,
-        encoder: Encoder,
-        action_size: int,
-        min_logstd: float,
-        max_logstd: float,
-        use_std_parameter: bool,
-        n_actors: int = 1,
-    ):
+    def __init__(self, models: List[SquashedNormalPolicy]):
         super().__init__()
-        self._action_size = action_size
-        self._encoder = encoder
-        self._min_logstd = min_logstd
-        self._max_logstd = max_logstd
-        self._use_std_parameter = use_std_parameter
-        self.n_actors = n_actors
-
-        self._mu = nn.ModuleList(
-            [
-                nn.Linear(encoder.get_feature_size(), action_size)
-                for _ in range(self.n_actors)
-            ]
-        )
-        if use_std_parameter:
-            initial_logstd = torch.zeros(1, action_size, dtype=torch.float32)
-            self._logstd = nn.ParameterList(
-                [nn.Parameter(initial_logstd) for _ in range(self.n_actors)]
-            )
-        else:
-            self._logstd = nn.ModuleList(
-                [
-                    nn.Linear(encoder.get_feature_size(), action_size)
-                    for _ in range(self.n_actors)
-                ]
-            )
+        self._models = nn.ModuleList(models)
 
     def _compute_logstd(self, h: torch.Tensor) -> torch.Tensor:
         if self._use_std_parameter:

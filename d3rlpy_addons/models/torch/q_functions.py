@@ -23,11 +23,11 @@ class DiscreteDQRQFunction(DiscreteQRQFunction):
     _q_value_offset: float
 
     def __init__(
-        self,
-        encoder: Encoder,
-        action_size: int,
-        n_quantiles: int,
-        q_value_offset: float = 0.0,
+            self,
+            encoder: Encoder,
+            action_size: int,
+            n_quantiles: int,
+            q_value_offset: float = 0.0,
     ):
         super().__init__(encoder, action_size, n_quantiles)
 
@@ -59,10 +59,10 @@ class ContinuousDQRQFunction(ContinuousQRQFunction):
     _q_value_offset: float
 
     def __init__(
-        self,
-        encoder: EncoderWithAction,
-        n_quantiles: int,
-        q_value_offset: float = 0.0,
+            self,
+            encoder: EncoderWithAction,
+            n_quantiles: int,
+            q_value_offset: float = 0.0,
     ):
         super().__init__(encoder, n_quantiles)
 
@@ -140,7 +140,7 @@ class ContinuousDMeanQFunction(ContinuousMeanQFunction):
         self._fc0 = type(self._fc)(encoder.get_feature_size(), 1)
         self._encoder0 = copy.deepcopy(self._encoder)
 
-        # copy weights and stuff
+        # # copy weights and stuff
         self._fc0.load_state_dict(self._fc.state_dict())
         self._encoder0.load_state_dict(self._encoder.state_dict())
 
@@ -154,44 +154,39 @@ class ContinuousDMeanQFunction(ContinuousMeanQFunction):
         # set fc0 in eval mode only
         self._fc0.eval()
         self._encoder0.eval()
-        self._gaussian_layer = GaussianNoiseInverseWeightLayer(n_samples=10,
-                                                               mean=0.0,
-                                                               std=0.01)
+        # self._gaussian_layer = GaussianNoiseInverseWeightLayer(n_samples=10,
+        #                                                        mean=0.0,
+        #                                                        std=0.01)
 
     def forward(self, x: torch.Tensor, action: torch.Tensor) -> torch.Tensor:
-        return cast(
-            torch.Tensor,
-            (self._fc(self._encoder(x, action)) -
-             self._fc0(self._encoder0(x, action))) + self._q_value_offset,
-        )
-        # return cast(torch.Tensor, self._fc(self._encoder(x, action)))
+        return cast(torch.Tensor,
+                    self._q_value_offset + self._fc(self._encoder(x, action)) - self._fc0(self._encoder0(x, action)))
 
-    def compute_error(
-        self,
-        obs_t: torch.Tensor,
-        act_t: torch.Tensor,
-        rew_tp1: torch.Tensor,
-        q_tp1: torch.Tensor,
-        ter_tp1: torch.Tensor,
-        gamma: float = 0.99,
-        reduction: str = "mean",
-    ) -> torch.Tensor:
+    def compute_error(self, observations: torch.Tensor,
+                      actions: torch.Tensor,
+                      rewards: torch.Tensor,
+                      target: torch.Tensor,
+                      terminals: torch.Tensor,
+                      gamma: float = 0.99,
+                      reduction: str = "mean") -> torch.Tensor:
 
-        with torch.no_grad():
-            obs_t, w = self._gaussian_layer(obs_t)  # 64,5  ->  192,5
-
-            # resize act_t  64,1  ->  192,1
-            act_t = torch.repeat_interleave(
-                act_t, repeats=self._gaussian_layer.n_samples, dim=0)
-
-        q_t = self.forward(obs_t, act_t)
-
-        y = rew_tp1 + gamma * q_tp1 * (1 - ter_tp1)
-        # resize y 64,1  ->  192,1
-        y = torch.repeat_interleave(y,
-                                    repeats=self._gaussian_layer.n_samples,
-                                    dim=0)
-
-        loss = w * F.mse_loss(q_t, y, reduction="none")
-
+        # with torch.no_grad():
+        #     observations, w = self._gaussian_layer(observations)  # 64,5  ->  192,5
+        #
+        #     # resize act_t  64,1  ->  192,1
+        #     actions = torch.repeat_interleave(
+        #         actions, repeats=self._gaussian_layer.n_samples, dim=0)
+        #
+        # q_t = self.forward(observations, actions)
+        #
+        # y = rewards + gamma * target * (1 - terminals)
+        # # resize y 64,1  ->  192,1
+        # y = torch.repeat_interleave(y,
+        #                             repeats=self._gaussian_layer.n_samples,
+        #                             dim=0)
+        #
+        # loss = w * F.mse_loss(q_t, y, reduction="none")
+        value = self.forward(observations, actions)
+        y = rewards + gamma * target * (1 - terminals)
+        loss = F.mse_loss(value, y, reduction="none")
         return compute_reduce(loss, reduction)
