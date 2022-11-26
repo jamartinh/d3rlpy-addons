@@ -85,8 +85,7 @@ class ContinuousDQRQFunction(ContinuousQRQFunction):
 
     def _compute_quantiles(self, h: torch.Tensor,
                            taus: torch.Tensor) -> torch.Tensor:
-        return cast(torch.Tensor,
-                    (self._fc(h) - self._fc0(h)) + self._q_value_offset)
+        return cast(torch.Tensor, self._q_value_offset + self._fc(h) - self._fc0(h))
 
 
 class DiscreteDMeanQFunction(DiscreteMeanQFunction):
